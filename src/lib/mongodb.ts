@@ -12,7 +12,7 @@ const dbNameFromUri = (() => {
     return undefined;
   }
 })();
-const dbName = dbNameFromEnv || dbNameFromUri || "aloyon"; // <— final source of truth
+const dbName = dbNameFromEnv || dbNameFromUri || "Aloyon"; // <— final source of truth
 
 declare global {
   // eslint-disable-next-line no-var
