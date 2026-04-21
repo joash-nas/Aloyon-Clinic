@@ -70,8 +70,6 @@ function PatientsListInner() {
   const [refreshKey, setRefreshKey] = useState(0);
 
   const [showAddModal, setShowAddModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [patientToEdit, setPatientToEdit] = useState<Row | null>(null);
   const [patientToDelete, setPatientToDelete] = useState<Row | null>(null);
 
   const [form, setForm] = useState<PatientFormState>(EMPTY_FORM);
@@ -166,8 +164,6 @@ function PatientsListInner() {
 
   function closeModals() {
     setShowAddModal(false);
-    setShowEditModal(false);
-    setPatientToEdit(null);
     setForm(EMPTY_FORM);
     setFormError(null);
     setFormBusy(false);
@@ -198,7 +194,6 @@ function PatientsListInner() {
     }
   }
 
-
   async function handleDeletePatient() {
     if (!patientToDelete?._id) return;
 
@@ -222,9 +217,9 @@ function PatientsListInner() {
 
   return (
     <>
-      <div className="space-y-5">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
+      <div className="w-full min-w-0 space-y-5">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+          <div className="flex-1 min-w-0">
             <h1 className="text-xl font-semibold tracking-tight">Patients</h1>
             <p className="text-sm text-muted">
               Browse your patient list, see their last check-ups, and open a
@@ -232,8 +227,8 @@ function PatientsListInner() {
             </p>
           </div>
 
-          <div className="flex flex-col items-end gap-2">
-            <div className="flex flex-wrap gap-3 justify-end">
+          <div className="w-full xl:w-auto xl:max-w-[420px] flex flex-col gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <StatCard label="Total patients" value={total.toString()} />
               <StatCard
                 label="Average age"
@@ -241,7 +236,7 @@ function PatientsListInner() {
               />
             </div>
 
-            <div className="flex flex-wrap items-center justify-end gap-2">
+            <div className="flex flex-wrap items-center gap-2 xl:justify-end">
               <button
                 onClick={openAddModal}
                 className="text-xs md:text-sm rounded-full border px-3 py-1.5 bg-[var(--primary)]/15 hover:bg-[var(--primary)]/22 transition"
@@ -261,15 +256,15 @@ function PatientsListInner() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-col lg:flex-row lg:items-center gap-3">
           <input
             value={q}
             onChange={(e) => setQ(e.currentTarget.value)}
             placeholder="Search name, email, phone…"
-            className="w-[360px] max-w-full rounded-xl px-3 py-2 ring-1 ring-[var(--border)] bg-white/95 outline-none focus:ring-[var(--primary)]"
+            className="w-full lg:max-w-md rounded-xl px-3 py-2 ring-1 ring-[var(--border)] bg-white/95 outline-none focus:ring-[var(--primary)]"
           />
 
-          <div className="flex items-center gap-2 ml-auto">
+          <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
             <Dropdown
               label={`Sort: ${labelFor(sortKey)}`}
               items={[
@@ -290,15 +285,15 @@ function PatientsListInner() {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <div className="rounded-2xl overflow-hidden ring-1 ring-[var(--border)] bg-white/90 min-w-[1100px]">
-            <div className="grid grid-cols-12 px-4 py-2 text-[11px] font-semibold text-muted uppercase tracking-wide bg-black/[0.03]">
-              <div className="col-span-4">Name</div>
-              <div className="col-span-3">Email</div>
-              <div className="col-span-2">Last check-up</div>
-              <div className="col-span-1">Next check-up</div>
-              <div className="col-span-1 text-right">Age</div>
-              <div className="col-span-1 text-right">Actions</div>
+        <div className="w-full min-w-0">
+          <div className="rounded-2xl overflow-hidden ring-1 ring-[var(--border)] bg-white/90 w-full">
+            <div className="grid grid-cols-12 gap-4 px-4 py-2 text-[11px] font-semibold text-muted uppercase tracking-wide bg-black/[0.03]">
+              <div className="col-span-4 min-w-0">Name</div>
+              <div className="col-span-3 min-w-0">Email</div>
+              <div className="col-span-2 min-w-0">Last check-up</div>
+              <div className="col-span-1 min-w-0">Next check-up</div>
+              <div className="col-span-1 text-right min-w-0">Age</div>
+              <div className="col-span-1 text-right min-w-0">Actions</div>
             </div>
 
             {loading ? (
@@ -322,17 +317,17 @@ function PatientsListInner() {
                     <li
                       key={r._id}
                       className={[
-                        "grid grid-cols-12 px-4 py-3 hover:bg-black/[0.04] transition items-center",
+                        "grid grid-cols-12 gap-4 px-4 py-3 hover:bg-black/[0.04] transition items-center",
                         idx % 2 === 1 ? "bg-black/[0.01]" : "",
                       ].join(" ")}
                     >
                       <Link
                         href={`/dashboard/patients/${r._id}`}
-                        className="col-span-11 grid grid-cols-11 items-center min-w-0"
+                        className="col-span-11 grid grid-cols-11 gap-4 items-center min-w-0"
                       >
-                        <div className="col-span-4 flex items-center gap-3 min-w-0">
+                        <div className="col-span-4 min-w-0 flex items-center gap-3">
                           <Avatar label={name} />
-                          <div className="truncate">
+                          <div className="min-w-0">
                             <div className="truncate font-medium">{name}</div>
                             <div className="text-[11px] text-muted truncate">
                               {r.profile?.phone
@@ -342,21 +337,23 @@ function PatientsListInner() {
                           </div>
                         </div>
 
-                        <div className="col-span-3 truncate text-muted pr-3">
+                        <div className="col-span-3 min-w-0 truncate text-muted">
                           {r.email}
                         </div>
 
-                        <div className="col-span-2 flex items-center">
+                        <div className="col-span-2 min-w-0 flex items-center">
                           {hasLast ? (
                             <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] bg-emerald-50 text-emerald-700 border border-emerald-100">
                               {lastLabel}
                             </span>
                           ) : (
-                            <span className="text-[11px] text-muted">No record</span>
+                            <span className="text-[11px] text-muted">
+                              No record
+                            </span>
                           )}
                         </div>
 
-                        <div className="col-span-1 flex items-center">
+                        <div className="col-span-1 min-w-0 flex items-center">
                           {hasLast ? (
                             <span className="inline-flex items-center px-2 py-1 rounded-full text-[11px] bg-indigo-50 text-indigo-700 border border-indigo-100 whitespace-nowrap">
                               {nextLabel}
@@ -366,12 +363,12 @@ function PatientsListInner() {
                           )}
                         </div>
 
-                        <div className="col-span-1 text-right pr-2">
+                        <div className="col-span-1 text-right pr-2 min-w-0">
                           <span className="text-sm">{age ?? "—"}</span>
                         </div>
                       </Link>
 
-                      <div className="col-span-1 flex justify-end gap-2 pl-2">
+                      <div className="col-span-1 flex justify-end pl-2 min-w-0">
                         <button
                           type="button"
                           onClick={() => {
@@ -393,9 +390,10 @@ function PatientsListInner() {
         </div>
 
         {!loading && sorted.length > 0 && (
-          <div className="flex items-center justify-between text-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-sm">
             <div className="text-muted">
-              Page {page} of {pageCount} • Showing {paged.length} of {sorted.length}
+              Page {page} of {pageCount} • Showing {paged.length} of{" "}
+              {sorted.length}
             </div>
             <div className="flex gap-2">
               <button
@@ -432,7 +430,11 @@ function PatientsListInner() {
 
       <ConfirmDeleteModal
         open={!!patientToDelete}
-        patientName={patientToDelete?.profile?.fullName || patientToDelete?.email || "this patient"}
+        patientName={
+          patientToDelete?.profile?.fullName ||
+          patientToDelete?.email ||
+          "this patient"
+        }
         busy={deleteBusy}
         onCancel={() => {
           setPatientToDelete(null);
@@ -446,8 +448,10 @@ function PatientsListInner() {
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="min-w-[140px] rounded-xl px-4 py-2 ring-1 ring-[var(--border)] bg-white/90">
-      <div className="text-[11px] uppercase tracking-wide text-muted">{label}</div>
+    <div className="w-full min-w-0 rounded-xl px-4 py-2 ring-1 ring-[var(--border)] bg-white/90">
+      <div className="text-[11px] uppercase tracking-wide text-muted">
+        {label}
+      </div>
       <div className="text-lg font-semibold mt-0.5">{value}</div>
     </div>
   );
@@ -456,7 +460,7 @@ function StatCard({ label, value }: { label: string; value: string }) {
 function Avatar({ label }: { label: string }) {
   const letter = (label || "?").slice(0, 1).toUpperCase();
   return (
-    <div className="h-8 w-8 rounded-lg bg-[var(--primary)]/18 text-[var(--primary-ink,#2a2a2a)] flex items-center justify-center text-sm font-semibold">
+    <div className="h-8 w-8 rounded-lg bg-[var(--primary)]/18 text-[var(--primary-ink,#2a2a2a)] flex items-center justify-center text-sm font-semibold shrink-0">
       {letter}
     </div>
   );
@@ -482,7 +486,7 @@ function Dropdown({
       </button>
       {open && (
         <div
-          className="absolute z-10 mt-2 w-44 rounded-xl ring-1 ring-[var(--border)] bg-white/98 shadow-lg p-1"
+          className="absolute right-0 z-10 mt-2 w-44 rounded-xl ring-1 ring-[var(--border)] bg-white/98 shadow-lg p-1"
           onMouseLeave={() => setOpen(false)}
         >
           {items.map((it) => (
@@ -507,25 +511,25 @@ function SkeletonList({ rows = 6 }: { rows?: number }) {
   return (
     <ul className="animate-pulse divide-y divide-[var(--border)]">
       {Array.from({ length: rows }).map((_, i) => (
-        <li key={i} className="grid grid-cols-12 px-4 py-3">
-          <div className="col-span-4 flex items-center gap-3">
-            <div className="h-8 w-8 rounded-lg bg-black/10" />
+        <li key={i} className="grid grid-cols-12 gap-4 px-4 py-3">
+          <div className="col-span-4 flex items-center gap-3 min-w-0">
+            <div className="h-8 w-8 rounded-lg bg-black/10 shrink-0" />
             <div className="h-3 w-40 rounded bg-black/10" />
           </div>
-          <div className="col-span-3">
-            <div className="h-3 w-56 rounded bg-black/10" />
+          <div className="col-span-3 min-w-0">
+            <div className="h-3 w-full max-w-[220px] rounded bg-black/10" />
           </div>
-          <div className="col-span-2">
-            <div className="h-3 w-32 rounded bg-black/10" />
+          <div className="col-span-2 min-w-0">
+            <div className="h-3 w-full max-w-[120px] rounded bg-black/10" />
           </div>
-          <div className="col-span-1">
-            <div className="h-3 w-16 rounded bg-black/10" />
+          <div className="col-span-1 min-w-0">
+            <div className="h-3 w-full max-w-[70px] rounded bg-black/10" />
           </div>
-          <div className="col-span-1 flex justify-end">
+          <div className="col-span-1 flex justify-end min-w-0">
             <div className="h-3 w-8 rounded bg-black/10" />
           </div>
-          <div className="col-span-1 flex justify-end">
-            <div className="h-7 w-20 rounded bg-black/10" />
+          <div className="col-span-1 flex justify-end min-w-0">
+            <div className="h-7 w-16 rounded bg-black/10" />
           </div>
         </li>
       ))}
@@ -537,7 +541,9 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
   return (
     <div className="px-6 py-14 text-center">
       <div className="text-4xl mb-2">🩺</div>
-      <div className="text-sm text-muted mb-4">No patients found. Try another search.</div>
+      <div className="text-sm text-muted mb-4">
+        No patients found. Try another search.
+      </div>
       <button
         onClick={onAdd}
         className="rounded-xl px-4 py-2 ring-1 ring-[var(--border)] bg-white hover:bg-black/5 text-sm"
@@ -599,7 +605,9 @@ function PatientModal({
             <Field label="Full name" required>
               <input
                 value={form.fullName}
-                onChange={(e) => setForm((s) => ({ ...s, fullName: e.target.value }))}
+                onChange={(e) =>
+                  setForm((s) => ({ ...s, fullName: e.target.value }))
+                }
                 className="w-full rounded-xl px-3 py-2 ring-1 ring-[var(--border)] bg-white outline-none focus:ring-[var(--primary)]"
                 placeholder="Juan Dela Cruz"
                 required
@@ -610,7 +618,9 @@ function PatientModal({
               <input
                 type="email"
                 value={form.email}
-                onChange={(e) => setForm((s) => ({ ...s, email: e.target.value }))}
+                onChange={(e) =>
+                  setForm((s) => ({ ...s, email: e.target.value }))
+                }
                 className="w-full rounded-xl px-3 py-2 ring-1 ring-[var(--border)] bg-white outline-none focus:ring-[var(--primary)]"
                 placeholder="patient@email.com"
                 required
@@ -620,7 +630,9 @@ function PatientModal({
             <Field label="Phone">
               <input
                 value={form.phone}
-                onChange={(e) => setForm((s) => ({ ...s, phone: e.target.value }))}
+                onChange={(e) =>
+                  setForm((s) => ({ ...s, phone: e.target.value }))
+                }
                 className="w-full rounded-xl px-3 py-2 ring-1 ring-[var(--border)] bg-white outline-none focus:ring-[var(--primary)]"
                 placeholder="09XXXXXXXXX"
               />
@@ -630,18 +642,29 @@ function PatientModal({
               <input
                 type="date"
                 value={form.dob}
-                onChange={(e) => setForm((s) => ({ ...s, dob: e.target.value }))}
+                onChange={(e) =>
+                  setForm((s) => ({ ...s, dob: e.target.value }))
+                }
                 className="w-full rounded-xl px-3 py-2 ring-1 ring-[var(--border)] bg-white outline-none focus:ring-[var(--primary)]"
               />
             </Field>
 
-            <Field label={mode === "add" ? "Password" : "New password"} required={mode === "add"}>
+            <Field
+              label={mode === "add" ? "Password" : "New password"}
+              required={mode === "add"}
+            >
               <input
                 type="password"
                 value={form.password}
-                onChange={(e) => setForm((s) => ({ ...s, password: e.target.value }))}
+                onChange={(e) =>
+                  setForm((s) => ({ ...s, password: e.target.value }))
+                }
                 className="w-full rounded-xl px-3 py-2 ring-1 ring-[var(--border)] bg-white outline-none focus:ring-[var(--primary)]"
-                placeholder={mode === "add" ? "Minimum 8 characters" : "Leave blank to keep current password"}
+                placeholder={
+                  mode === "add"
+                    ? "Minimum 8 characters"
+                    : "Leave blank to keep current password"
+                }
                 required={mode === "add"}
               />
             </Field>
@@ -649,7 +672,9 @@ function PatientModal({
             <Field label="Address">
               <input
                 value={form.address}
-                onChange={(e) => setForm((s) => ({ ...s, address: e.target.value }))}
+                onChange={(e) =>
+                  setForm((s) => ({ ...s, address: e.target.value }))
+                }
                 className="w-full rounded-xl px-3 py-2 ring-1 ring-[var(--border)] bg-white outline-none focus:ring-[var(--primary)]"
                 placeholder="City / full address"
               />
@@ -701,7 +726,9 @@ function ConfirmDeleteModal({
       <div className="w-full max-w-md rounded-2xl bg-white shadow-xl ring-1 ring-black/5 p-5">
         <h2 className="text-lg font-semibold mb-2">Delete patient</h2>
         <p className="text-sm text-muted mb-5">
-          Are you sure you want to delete <span className="font-medium text-black">{patientName}</span>? This action cannot be undone.
+          Are you sure you want to delete{" "}
+          <span className="font-medium text-black">{patientName}</span>? This
+          action cannot be undone.
         </p>
         <div className="flex items-center justify-end gap-2">
           <button
