@@ -74,9 +74,6 @@ const MENUS: Record<Role | "default", Item[]> = {
     { href: "/dashboard", label: "Overview", icon: "🏠" },
     { href: "/dashboard/appointments", label: "Appointments", icon: "📆" },
     { href: "/dashboard/shop-orders", label: "Shop orders", icon: "🛒" },
-
-    { href: "/dashboard/patient-qr", label: "Patient QR", icon: "🔳" },
-
     { href: "/dashboard/prescriptions", label: "Prescriptions", icon: "💊" },
     { href: "/dashboard/profile", label: "Profile", icon: "⚙️" },
   ],

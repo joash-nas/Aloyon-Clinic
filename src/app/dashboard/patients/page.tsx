@@ -9,7 +9,7 @@ import { ageFromDob } from "@/lib/age";
 
 type Row = {
   _id: string;
-  email: string;
+  email?: string | null;
   role: "patient";
   profile?: {
     fullName?: string | null;
@@ -29,7 +29,6 @@ type PatientFormState = {
   phone: string;
   dob: string;
   address: string;
-  password: string;
 };
 
 const EMPTY_FORM: PatientFormState = {
@@ -38,7 +37,6 @@ const EMPTY_FORM: PatientFormState = {
   phone: "",
   dob: "",
   address: "",
-  password: "",
 };
 
 export default function PatientsListPage() {
@@ -84,25 +82,40 @@ function PatientsListInner() {
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+
+    async function loadPatients() {
       setLoading(true);
       setErr(null);
+
       try {
         const url =
           "/api/patients" + (needle ? `?q=${encodeURIComponent(needle)}` : "");
+
         const r = await fetch(url, { cache: "no-store" });
-        if (!r.ok) throw new Error("Failed");
+
+        if (!r.ok) {
+          throw new Error("Failed");
+        }
+
         const data = await r.json();
+
         if (!cancelled) {
           setRows(data.items || []);
           setPage(1);
         }
       } catch {
-        if (!cancelled) setErr("Could not load patients.");
+        if (!cancelled) {
+          setErr("Could not load patients.");
+        }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
-    })();
+    }
+
+    void loadPatients();
+
     return () => {
       cancelled = true;
     };
@@ -122,17 +135,22 @@ function PatientsListInner() {
 
   const sorted = useMemo(() => {
     const base = [...rows];
+
     base.sort((a, b) => {
       const aName = (a.profile?.fullName || "").toLowerCase();
       const bName = (b.profile?.fullName || "").toLowerCase();
+
       const aAge = ageFromDob(a.profile?.dob) ?? -1;
       const bAge = ageFromDob(b.profile?.dob) ?? -1;
+
       const aEmail = (a.email || "").toLowerCase();
       const bEmail = (b.email || "").toLowerCase();
+
       const aLast = a.lastVisit ? Date.parse(a.lastVisit) || 0 : 0;
       const bLast = b.lastVisit ? Date.parse(b.lastVisit) || 0 : 0;
 
       let cmp = 0;
+
       if (sortKey === "name") cmp = aName.localeCompare(bName);
       if (sortKey === "email") cmp = aEmail.localeCompare(bEmail);
       if (sortKey === "age") cmp = aAge - bAge;
@@ -140,6 +158,7 @@ function PatientsListInner() {
 
       return sortDir === "asc" ? cmp : -cmp;
     });
+
     return base;
   }, [rows, sortKey, sortDir]);
 
@@ -171,17 +190,27 @@ function PatientsListInner() {
 
   async function handleAddPatient(e: FormEvent) {
     e.preventDefault();
+
     setFormBusy(true);
     setFormError(null);
 
     try {
+      const payload = {
+        fullName: form.fullName.trim(),
+        email: form.email.trim(),
+        phone: form.phone.trim(),
+        dob: form.dob.trim(),
+        address: form.address.trim(),
+      };
+
       const r = await fetch("/api/patients", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
       });
 
       const data = await r.json().catch(() => ({}));
+
       if (!r.ok) {
         throw new Error(data?.error || "Failed to add patient.");
       }
@@ -198,16 +227,20 @@ function PatientsListInner() {
     if (!patientToDelete?._id) return;
 
     setDeleteBusy(true);
+
     try {
       const r = await fetch(`/api/patients/${patientToDelete._id}`, {
         method: "DELETE",
       });
+
       const data = await r.json().catch(() => ({}));
+
       if (!r.ok) {
         throw new Error(data?.error || "Failed to delete patient.");
       }
 
       setPatientToDelete(null);
+      setDeleteBusy(false);
       refreshPatients();
     } catch (error: any) {
       setErr(error?.message || "Failed to delete patient.");
@@ -275,6 +308,7 @@ function PatientsListInner() {
               ]}
               onSelect={(k) => setSortKey(k as SortKey)}
             />
+
             <button
               onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
               className="h-9 px-3 rounded-xl ring-1 ring-[var(--border)] bg-white/95 text-sm"
@@ -338,7 +372,7 @@ function PatientsListInner() {
                         </div>
 
                         <div className="col-span-3 min-w-0 truncate text-muted">
-                          {r.email}
+                          {r.email ? r.email : "No email"}
                         </div>
 
                         <div className="col-span-2 min-w-0 flex items-center">
@@ -395,6 +429,7 @@ function PatientsListInner() {
               Page {page} of {pageCount} • Showing {paged.length} of{" "}
               {sorted.length}
             </div>
+
             <div className="flex gap-2">
               <button
                 className="h-9 px-3 rounded-xl ring-1 ring-[var(--border)] bg-white/95 disabled:opacity-50"
@@ -403,6 +438,7 @@ function PatientsListInner() {
               >
                 Prev
               </button>
+
               <button
                 className="h-9 px-3 rounded-xl ring-1 ring-[var(--border)] bg-white/95 disabled:opacity-50"
                 onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
@@ -417,7 +453,6 @@ function PatientsListInner() {
 
       <PatientModal
         open={showAddModal}
-        mode="add"
         title="Add patient"
         submitLabel={formBusy ? "Saving..." : "Save patient"}
         form={form}
@@ -459,6 +494,7 @@ function StatCard({ label, value }: { label: string; value: string }) {
 
 function Avatar({ label }: { label: string }) {
   const letter = (label || "?").slice(0, 1).toUpperCase();
+
   return (
     <div className="h-8 w-8 rounded-lg bg-[var(--primary)]/18 text-[var(--primary-ink,#2a2a2a)] flex items-center justify-center text-sm font-semibold shrink-0">
       {letter}
@@ -476,6 +512,7 @@ function Dropdown({
   onSelect: (key: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+
   return (
     <div className="relative">
       <button
@@ -484,6 +521,7 @@ function Dropdown({
       >
         {label}
       </button>
+
       {open && (
         <div
           className="absolute right-0 z-10 mt-2 w-44 rounded-xl ring-1 ring-[var(--border)] bg-white/98 shadow-lg p-1"
@@ -516,18 +554,23 @@ function SkeletonList({ rows = 6 }: { rows?: number }) {
             <div className="h-8 w-8 rounded-lg bg-black/10 shrink-0" />
             <div className="h-3 w-40 rounded bg-black/10" />
           </div>
+
           <div className="col-span-3 min-w-0">
             <div className="h-3 w-full max-w-[220px] rounded bg-black/10" />
           </div>
+
           <div className="col-span-2 min-w-0">
             <div className="h-3 w-full max-w-[120px] rounded bg-black/10" />
           </div>
+
           <div className="col-span-1 min-w-0">
             <div className="h-3 w-full max-w-[70px] rounded bg-black/10" />
           </div>
+
           <div className="col-span-1 flex justify-end min-w-0">
             <div className="h-3 w-8 rounded bg-black/10" />
           </div>
+
           <div className="col-span-1 flex justify-end min-w-0">
             <div className="h-7 w-16 rounded bg-black/10" />
           </div>
@@ -544,6 +587,7 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
       <div className="text-sm text-muted mb-4">
         No patients found. Try another search.
       </div>
+
       <button
         onClick={onAdd}
         className="rounded-xl px-4 py-2 ring-1 ring-[var(--border)] bg-white hover:bg-black/5 text-sm"
@@ -556,7 +600,6 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
 
 function PatientModal({
   open,
-  mode,
   title,
   submitLabel,
   form,
@@ -567,7 +610,6 @@ function PatientModal({
   onSubmit,
 }: {
   open: boolean;
-  mode: "add" | "edit";
   title: string;
   submitLabel: string;
   form: PatientFormState;
@@ -587,11 +629,11 @@ function PatientModal({
             <div>
               <h2 className="text-lg font-semibold">{title}</h2>
               <p className="text-sm text-muted">
-                {mode === "add"
-                  ? "Create a patient account with login access."
-                  : "Update patient details. Leave password blank to keep the current one."}
+                Create a patient record. Email is optional and no password is
+                needed for walk-in patient records.
               </p>
             </div>
+
             <button
               type="button"
               onClick={onClose}
@@ -614,7 +656,7 @@ function PatientModal({
               />
             </Field>
 
-            <Field label="Email" required>
+            <Field label="Email">
               <input
                 type="email"
                 value={form.email}
@@ -622,8 +664,7 @@ function PatientModal({
                   setForm((s) => ({ ...s, email: e.target.value }))
                 }
                 className="w-full rounded-xl px-3 py-2 ring-1 ring-[var(--border)] bg-white outline-none focus:ring-[var(--primary)]"
-                placeholder="patient@email.com"
-                required
+                placeholder="Optional"
               />
             </Field>
 
@@ -649,26 +690,6 @@ function PatientModal({
               />
             </Field>
 
-            <Field
-              label={mode === "add" ? "Password" : "New password"}
-              required={mode === "add"}
-            >
-              <input
-                type="password"
-                value={form.password}
-                onChange={(e) =>
-                  setForm((s) => ({ ...s, password: e.target.value }))
-                }
-                className="w-full rounded-xl px-3 py-2 ring-1 ring-[var(--border)] bg-white outline-none focus:ring-[var(--primary)]"
-                placeholder={
-                  mode === "add"
-                    ? "Minimum 8 characters"
-                    : "Leave blank to keep current password"
-                }
-                required={mode === "add"}
-              />
-            </Field>
-
             <Field label="Address">
               <input
                 value={form.address}
@@ -681,7 +702,9 @@ function PatientModal({
             </Field>
           </div>
 
-          {error && <div className="px-5 pb-1 text-sm text-red-700">{error}</div>}
+          {error && (
+            <div className="px-5 pb-1 text-sm text-red-700">{error}</div>
+          )}
 
           <div className="flex items-center justify-end gap-2 border-t px-5 py-4">
             <button
@@ -692,6 +715,7 @@ function PatientModal({
             >
               Cancel
             </button>
+
             <button
               type="submit"
               className="rounded-xl px-4 py-2 text-sm bg-[var(--primary)]/20 hover:bg-[var(--primary)]/30 disabled:opacity-60"
@@ -725,11 +749,13 @@ function ConfirmDeleteModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4">
       <div className="w-full max-w-md rounded-2xl bg-white shadow-xl ring-1 ring-black/5 p-5">
         <h2 className="text-lg font-semibold mb-2">Delete patient</h2>
+
         <p className="text-sm text-muted mb-5">
           Are you sure you want to delete{" "}
           <span className="font-medium text-black">{patientName}</span>? This
           action cannot be undone.
         </p>
+
         <div className="flex items-center justify-end gap-2">
           <button
             type="button"
@@ -739,6 +765,7 @@ function ConfirmDeleteModal({
           >
             Cancel
           </button>
+
           <button
             type="button"
             onClick={onConfirm}
@@ -781,18 +808,27 @@ function labelFor(k: SortKey) {
 
 function prettifyPhone(p?: string | null) {
   if (!p) return "";
+
   const d = p.replace(/\D/g, "");
-  if (d.length === 11)
+
+  if (d.length === 11) {
     return `(+63) ${d.slice(1, 4)} ${d.slice(4, 7)} ${d.slice(7, 11)}`;
-  if (d.length === 10)
+  }
+
+  if (d.length === 10) {
     return `(${d.slice(0, 3)}) ${d.slice(3, 6)} ${d.slice(6, 10)}`;
+  }
+
   return p;
 }
 
 function formatLastCheckup(iso?: string | null): string {
   if (!iso) return "—";
+
   const d = new Date(iso);
+
   if (Number.isNaN(d.getTime())) return "—";
+
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
@@ -802,10 +838,14 @@ function formatLastCheckup(iso?: string | null): string {
 
 function formatNextCheckup(iso?: string | null): string {
   if (!iso) return "—";
+
   const d = new Date(iso);
+
   if (Number.isNaN(d.getTime())) return "—";
+
   const next = new Date(d.getTime());
   next.setMonth(next.getMonth() + 6);
+
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
     year: "numeric",

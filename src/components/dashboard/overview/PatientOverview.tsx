@@ -13,24 +13,10 @@ type PatientSummary = {
   nextCheckupDate: string | null;
 };
 
-type RewardsSummary = {
-  ok: boolean;
-  points?: number;
-  lastEarnAt?: string | null;
-  expiresAt?: string | null;
-  expired?: boolean;
-  error?: string;
-};
-
 export default function PatientOverview({ user }: { user: any }) {
   const [summary, setSummary] = useState<PatientSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-
-  // Rewards state
-  const [rewards, setRewards] = useState<RewardsSummary | null>(null);
-  const [rewardsLoading, setRewardsLoading] = useState(false);
-  const [rewardsErr, setRewardsErr] = useState<string | null>(null);
 
   // -------------------- Load patient summary --------------------
   useEffect(() => {
@@ -39,86 +25,64 @@ export default function PatientOverview({ user }: { user: any }) {
     async function load() {
       setLoading(true);
       setErr(null);
+
       try {
         const res = await fetch("/api/me/summary", { cache: "no-store" });
+
         if (!res.ok) {
           const j = await res.json().catch(() => ({}));
           throw new Error(j.error || `Failed to load summary (${res.status})`);
         }
+
         const data = (await res.json()) as PatientSummary;
-        if (!cancelled) setSummary(data);
+
+        if (!cancelled) {
+          setSummary(data);
+        }
       } catch (e: unknown) {
         if (!cancelled) {
           setErr(e instanceof Error ? e.message : "Failed to load summary");
           setSummary(null);
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     }
 
     void load();
+
     return () => {
       cancelled = true;
     };
   }, []);
 
-  // -------------------- Load rewards summary --------------------
-  useEffect(() => {
-    let cancelled = false;
+  const lastCheck = summary?.lastCheckupDate
+    ? new Date(summary.lastCheckupDate)
+    : null;
 
-    async function loadRewards() {
-      setRewardsLoading(true);
-      setRewardsErr(null);
-      try {
-        const res = await fetch("/api/rewards/summary", { cache: "no-store" });
-        const j = (await res.json()) as RewardsSummary;
+  const nextCheck = summary?.nextCheckupDate
+    ? new Date(summary.nextCheckupDate)
+    : null;
 
-        if (cancelled) return;
+  const { label: nextCheckLabel, status: nextCheckStatus } =
+    describeNextCheck(nextCheck);
 
-        if (!res.ok || !j.ok) {
-          setRewards(null);
-          setRewardsErr(j?.error || `Failed to load rewards (${res.status})`);
-          return;
-        }
-
-        setRewards(j);
-      } catch (e: any) {
-        if (!cancelled) {
-          setRewards(null);
-          setRewardsErr(e?.message || "Failed to load rewards");
-        }
-      } finally {
-        if (!cancelled) setRewardsLoading(false);
-      }
-    }
-
-    void loadRewards();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const lastCheck = summary?.lastCheckupDate ? new Date(summary.lastCheckupDate) : null;
-  const nextCheck = summary?.nextCheckupDate ? new Date(summary.nextCheckupDate) : null;
-
-  const { label: nextCheckLabel, status: nextCheckStatus } = describeNextCheck(nextCheck);
-
-  const lastOrderDate = summary?.lastOrder?.createdAt && new Date(summary.lastOrder.createdAt);
+  const lastOrderDate =
+    summary?.lastOrder?.createdAt && new Date(summary.lastOrder.createdAt);
 
   const displayName = user?.full_name || user?.name || user?.email || "there";
 
-  // 6-month wellness cycle: 0–100% based on days since last checkup (max 180 days)
+  // 6-month wellness cycle: 0–100% based on days since last checkup
   const wellnessProgress = computeWellnessProgress(lastCheck);
 
-  // order completion vs pending (for the subtle bar)
+  // Order completion vs pending
   const totalOrders = summary?.ordersCount ?? 0;
   const pendingOrders = summary?.pendingOrders ?? 0;
   const completedOrders = Math.max(0, totalOrders - pendingOrders);
-  const ordersProgress = totalOrders > 0 ? Math.round((completedOrders / totalOrders) * 100) : 0;
-
-  // Rewards derived values
-  const points = rewards?.ok ? Number(rewards.points ?? 0) : 0;
+  const ordersProgress =
+    totalOrders > 0 ? Math.round((completedOrders / totalOrders) * 100) : 0;
 
   return (
     <div className="space-y-6">
@@ -140,7 +104,7 @@ export default function PatientOverview({ user }: { user: any }) {
 
       {/* Top row – shop orders + next check-up */}
       <div className="grid gap-4 lg:grid-cols-3">
-        {/* Shop orders (dominant card) */}
+        {/* Shop orders */}
         <div className="card p-5 space-y-3 lg:col-span-2">
           <div className="flex items-center justify-between gap-2">
             <div className="text-xs font-semibold uppercase tracking-wide text-muted">
@@ -181,7 +145,9 @@ export default function PatientOverview({ user }: { user: any }) {
               )}
 
               <div className="pt-3 flex flex-wrap gap-2 text-xs">
-                <SubtleLink href="/dashboard/shop-orders">View my orders</SubtleLink>
+                <SubtleLink href="/dashboard/shop-orders">
+                  View my orders
+                </SubtleLink>
                 <SubtleLink href="/shop">Go to shop</SubtleLink>
               </div>
             </>
@@ -200,9 +166,12 @@ export default function PatientOverview({ user }: { user: any }) {
 
           {!loading && !lastCheck && (
             <div className="space-y-2">
-              <div className="text-base font-semibold">No past check-up on record</div>
+              <div className="text-base font-semibold">
+                No past check-up on record
+              </div>
               <p className="text-xs text-muted">
-                We recommend a full eye check-up every <strong>6 months</strong> to keep your vision healthy.
+                We recommend a full eye check-up every <strong>6 months</strong>{" "}
+                to keep your vision healthy.
               </p>
               <SubtlePrimaryLink href="/dashboard/appointments" className="mt-2">
                 Book first eye exam
@@ -215,11 +184,13 @@ export default function PatientOverview({ user }: { user: any }) {
               <div className="text-sm">
                 Last check-up: <strong>{formatDate(lastCheck)}</strong>
               </div>
+
               {nextCheck && (
                 <div className="text-sm">
                   Recommended next: <strong>{formatMonthYear(nextCheck)}</strong>
                 </div>
               )}
+
               {nextCheckLabel && (
                 <div
                   className={[
@@ -253,20 +224,23 @@ export default function PatientOverview({ user }: { user: any }) {
               </div>
 
               <div className="pt-2">
-                <SubtleLink href="/dashboard/appointments">Schedule follow-up</SubtleLink>
+                <SubtleLink href="/dashboard/appointments">
+                  Schedule follow-up
+                </SubtleLink>
               </div>
             </div>
           )}
         </div>
       </div>
 
-      {/* Second row – appointments + quick actions + rewards */}
-      <div className="grid gap-4 lg:grid-cols-3">
+      {/* Second row – appointments + quick actions */}
+      <div className="grid gap-4 lg:grid-cols-2">
         {/* Appointments */}
         <div className="card p-5 space-y-2">
           <div className="text-xs font-semibold uppercase tracking-wide text-muted">
             Appointments
           </div>
+
           {loading && !summary ? (
             <div className="text-sm text-muted">Loading…</div>
           ) : (
@@ -274,6 +248,7 @@ export default function PatientOverview({ user }: { user: any }) {
               <div className="text-3xl font-semibold">
                 {summary?.upcomingAppointmentsCount ?? 0}
               </div>
+
               <div className="text-xs text-muted">
                 upcoming appointment
                 {(summary?.upcomingAppointmentsCount ?? 0) === 1 ? "" : "s"}
@@ -289,77 +264,23 @@ export default function PatientOverview({ user }: { user: any }) {
         </div>
 
         {/* Quick actions */}
-        <div className="card p-4 lg:col-span-1">
+        <div className="card p-5">
           <div className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">
             Quick actions
           </div>
+
           <div className="flex flex-wrap gap-2 text-xs">
             <ChipLink href="/dashboard/appointments">Book eye exam</ChipLink>
-            <ChipLink href="/dashboard/appointments">View my appointments</ChipLink>
+            <ChipLink href="/dashboard/appointments">
+              View my appointments
+            </ChipLink>
             <ChipLink href="/shop">Shop frames &amp; eyedrops</ChipLink>
             <ChipLink href="/dashboard/shop-orders">Track shop orders</ChipLink>
-            <ChipLink href="/dashboard/prescriptions">View prescriptions</ChipLink>
+            <ChipLink href="/dashboard/prescriptions">
+              View prescriptions
+            </ChipLink>
             <ChipLink href="/dashboard/profile">Update my profile</ChipLink>
           </div>
-        </div>
-
-        {/* Points & rewards (CONNECTED + no progress + no Active badge when points=0) */}
-        <div className="card p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="text-xs font-semibold uppercase tracking-wide text-muted">
-              Points &amp; rewards
-            </div>
-
-            {/* show only when it helps */}
-            {rewardsLoading ? (
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
-                Loading…
-              </span>
-            ) : rewardsErr ? (
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-50 text-rose-700">
-                Unavailable
-              </span>
-            ) : points > 0 ? (
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">
-                Active
-              </span>
-            ) : null}
-          </div>
-
-          <div className="flex items-baseline gap-2">
-            <div className="text-2xl font-semibold">{rewardsLoading ? "…" : points}</div>
-            <div className="text-xs text-muted">points</div>
-          </div>
-
-          <p className="text-xs text-muted">
-            Earn points when you book check-ups and purchase eyewear. Redeem points for discounts.
-          </p>
-
-          {/* Only show expiry when points > 0 */}
-          {points > 0 ? (
-            <div className="text-[11px] text-muted">
-              Expires on:{" "}
-              <span className="font-medium text-slate-700">
-                {rewardsLoading ? "…" : rewards?.ok ? fmtShortDate(rewards.expiresAt ?? null) : "—"}
-              </span>
-            </div>
-          ) : null}
-
-          {rewardsErr ? (
-            <div className="rounded-xl bg-rose-50 text-rose-700 text-xs px-3 py-2">
-              {rewardsErr}
-            </div>
-          ) : null}
-
-          <Link
-            href="/dashboard/patient-qr"
-            className={[
-              "text-[11px] px-2 py-1 rounded-lg bg-slate-100 hover:bg-[var(--primary)] hover:text-white transition inline-flex items-center justify-center",
-              rewardsLoading ? "opacity-70 pointer-events-none" : "",
-            ].join(" ")}
-          >
-            View rewards
-          </Link>
         </div>
       </div>
     </div>
@@ -368,7 +289,13 @@ export default function PatientOverview({ user }: { user: any }) {
 
 /* --- subtle link helpers -------------------------------------------------- */
 
-function SubtleLink({ href, children }: { href: string; children: React.ReactNode }) {
+function SubtleLink({
+  href,
+  children,
+}: {
+  href: string;
+  children: React.ReactNode;
+}) {
   return (
     <Link
       href={href}
@@ -401,7 +328,13 @@ function SubtlePrimaryLink({
   );
 }
 
-function ChipLink({ href, children }: { href: string; children: React.ReactNode }) {
+function ChipLink({
+  href,
+  children,
+}: {
+  href: string;
+  children: React.ReactNode;
+}) {
   return (
     <Link
       href={href}
@@ -414,11 +347,23 @@ function ChipLink({ href, children }: { href: string; children: React.ReactNode 
 
 /* --- tiny reusable progress bar ------------------------------------------ */
 
-function ProgressBar({ value, tone = "ok" }: { value: number; tone?: "ok" | "warn" | "danger" }) {
+function ProgressBar({
+  value,
+  tone = "ok",
+}: {
+  value: number;
+  tone?: "ok" | "warn" | "danger";
+}) {
   const safe = Math.max(0, Math.min(100, value));
+
   const base = "h-2 rounded-full transition-all duration-300";
+
   const color =
-    tone === "danger" ? "bg-red-500" : tone === "warn" ? "bg-amber-500" : "bg-emerald-500";
+    tone === "danger"
+      ? "bg-red-500"
+      : tone === "warn"
+      ? "bg-amber-500"
+      : "bg-emerald-500";
 
   return (
     <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
@@ -449,13 +394,6 @@ function formatMonthYear(d: Date): string {
   });
 }
 
-function fmtShortDate(iso?: string | null) {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("en-PH", { month: "short", day: "2-digit", year: "numeric" });
-}
-
 /**
  * Describe how far the next check-up is.
  */
@@ -470,17 +408,24 @@ function describeNextCheck(
 
   if (diffDays < 0) {
     return {
-      label: `Overdue by ${Math.abs(diffDays)} day${Math.abs(diffDays) === 1 ? "" : "s"}`,
+      label: `Overdue by ${Math.abs(diffDays)} day${
+        Math.abs(diffDays) === 1 ? "" : "s"
+      }`,
       status: "overdue",
     };
   }
-  if (diffDays === 0) return { label: "Due today", status: "soon" };
+
+  if (diffDays === 0) {
+    return { label: "Due today", status: "soon" };
+  }
+
   if (diffDays <= 30) {
     return {
       label: `Due in ${diffDays} day${diffDays === 1 ? "" : "s"}`,
       status: "soon",
     };
   }
+
   return { label: `Due in ${diffDays} days`, status: "ok" };
 }
 
@@ -489,9 +434,11 @@ function describeNextCheck(
  */
 function computeWellnessProgress(lastCheck: Date | null): number {
   if (!lastCheck) return 0;
+
   const now = new Date();
   const diffMs = now.getTime() - lastCheck.getTime();
   const diffDays = Math.max(0, diffMs / (1000 * 60 * 60 * 24));
   const pct = (diffDays / 180) * 100;
+
   return Math.round(Math.max(0, Math.min(100, pct)));
 }
