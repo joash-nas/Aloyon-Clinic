@@ -1,12 +1,11 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 // src/app/api/patients/[id]/doctor-notes/route.ts
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getDb } from "@/lib/mongodb";
 
-// For human-readable labels in the history log
 const FIELD_LABELS: Record<string, string> = {
   preScreening: "Pre-screening",
   chiefComplaint: "Chief complaint",
@@ -24,19 +23,33 @@ const FIELD_LABELS: Record<string, string> = {
   qualityCheck: "Quality check",
 };
 
-// only doctors allowed
 function ensureDoctor(session: any) {
   const role = session?.user?.role as string | undefined;
-  if (!session?.user?.id || role !== "doctor") {
-    return false;
-  }
-  return true;
+  return Boolean(session?.user?.id && role === "doctor");
 }
 
-// 
-// GET doctor notes
-//   - ONLY doctor can view
-//   - returns `notes` and `lastUpdated`
+function sanitizeNotes(src: any) {
+  return {
+    preScreening: src?.preScreening || "",
+    chiefComplaint: src?.chiefComplaint || "",
+    monoPd: src?.monoPd || "",
+    binPd: src?.binPd || "",
+    presentCorrectionVa: src?.presentCorrectionVa || "",
+    visualRequirement: src?.visualRequirement || "",
+    ocularHistory: src?.ocularHistory || "",
+    lensTypeAgeCondition: src?.lensTypeAgeCondition || "",
+    odVa: src?.odVa || "",
+    odVaComment: src?.odVaComment || "",
+    osVa: src?.osVa || "",
+    osVaComment: src?.osVaComment || "",
+    planManagement: src?.planManagement || "",
+    qualityCheck: src?.qualityCheck || "",
+  };
+}
+
+function displayName(doc: any, fallback: string) {
+  return doc?.profile?.fullName || doc?.name || doc?.email || fallback;
+}
 
 export async function GET(
   _req: Request,
@@ -44,6 +57,7 @@ export async function GET(
 ) {
   try {
     const session = await getServerSession(authOptions);
+
     if (!ensureDoctor(session)) {
       return NextResponse.json(
         { ok: false, error: "Forbidden" },
@@ -52,6 +66,14 @@ export async function GET(
     }
 
     const { id } = await ctx.params;
+
+    if (!ObjectId.isValid(id)) {
+      return NextResponse.json(
+        { ok: false, error: "Invalid patient ID" },
+        { status: 400 }
+      );
+    }
+
     const db = await getDb();
 
     const doc = await db.collection("doctor_notes").findOne(
@@ -75,18 +97,13 @@ export async function GET(
   }
 }
 
-
-// PUT doctor notes
-//   - ONLY doctor can edit
-//   - only updates `updatedAt` + history
-//     when there are actual changes
-
 export async function PUT(
   req: Request,
   ctx: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
+
     if (!ensureDoctor(session)) {
       return NextResponse.json(
         { ok: false, error: "Forbidden" },
@@ -95,26 +112,24 @@ export async function PUT(
     }
 
     const { id } = await ctx.params;
+
+    if (!ObjectId.isValid(id)) {
+      return NextResponse.json(
+        { ok: false, error: "Invalid patient ID" },
+        { status: 400 }
+      );
+    }
+
+    if (!ObjectId.isValid(session!.user!.id as string)) {
+      return NextResponse.json(
+        { ok: false, error: "Invalid doctor ID" },
+        { status: 400 }
+      );
+    }
+
     const body = await req.json().catch(() => ({}));
-
-    const src = (body && typeof body === "object" && (body as any).notes) || {};
-
-    const notes = {
-      preScreening: src.preScreening || "",
-      chiefComplaint: src.chiefComplaint || "",
-      monoPd: src.monoPd || "",
-      binPd: src.binPd || "",
-      presentCorrectionVa: src.presentCorrectionVa || "",
-      visualRequirement: src.visualRequirement || "",
-      ocularHistory: src.ocularHistory || "",
-      lensTypeAgeCondition: src.lensTypeAgeCondition || "",
-      odVa: src.odVa || "",
-      odVaComment: src.odVaComment || "",
-      osVa: src.osVa || "",
-      osVaComment: src.osVaComment || "",
-      planManagement: src.planManagement || "",
-      qualityCheck: src.qualityCheck || "",
-    };
+    const src = body?.notes || {};
+    const notes = sanitizeNotes(src);
 
     const db = await getDb();
     const coll = db.collection("doctor_notes");
@@ -122,25 +137,28 @@ export async function PUT(
     const patientId = new ObjectId(id);
     const doctorId = new ObjectId(session!.user!.id as string);
 
-    // fetch existing notes to see what changed
-    const existing = await coll.findOne<{ notes?: Record<string, any>; createdAt?: Date }>({
-      patientId,
-    });
+    const existing = await coll.findOne<{
+      notes?: Record<string, any>;
+      createdAt?: Date;
+      updatedAt?: Date;
+    }>({ patientId });
+
     const existingNotes = existing?.notes || {};
 
-    // compute which fields actually changed 
     const changedFields: string[] = [];
+
     for (const key of Object.keys(notes)) {
       const prevVal = String((existingNotes as any)[key] ?? "");
       const newVal = String((notes as any)[key] ?? "");
+
       if (prevVal !== newVal) {
         changedFields.push(FIELD_LABELS[key] || key);
       }
     }
 
-    
     if (changedFields.length === 0) {
-      const lastUpdated = (existing as any)?.updatedAt as Date | undefined;
+      const lastUpdated = existing?.updatedAt;
+
       return NextResponse.json({
         ok: true,
         changed: false,
@@ -150,7 +168,6 @@ export async function PUT(
 
     const now = new Date();
 
-   
     if (existing) {
       await coll.updateOne(
         { patientId },
@@ -172,33 +189,23 @@ export async function PUT(
       });
     }
 
-    // log into patient_history 
     const users = db.collection("users");
 
-    const doctorDoc = await users.findOne<{
-      name?: string;
-      email: string;
-      profile?: { fullName?: string };
-    }>(
+    const doctorDoc = await users.findOne(
       { _id: doctorId },
       { projection: { name: 1, email: 1, profile: 1 } }
     );
 
-    const patientDoc = await users.findOne<{
-      name?: string;
-      email: string;
-      profile?: { fullName?: string };
-    }>(
+    const patientDoc = await users.findOne(
       { _id: patientId },
       { projection: { name: 1, email: 1, profile: 1 } }
     );
 
-    const doctorName =
-      doctorDoc?.profile?.fullName || doctorDoc?.name || doctorDoc?.email || "Doctor";
-    const patientName =
-      patientDoc?.profile?.fullName || patientDoc?.name || patientDoc?.email || "Patient";
+    const doctorName = displayName(doctorDoc, "Doctor");
+    const patientName = displayName(patientDoc, "Patient");
 
     const title = `Updated doctor notes for ${patientName}`;
+
     const description =
       changedFields.length === 1
         ? `Changed field: ${changedFields[0]}.`
@@ -213,6 +220,11 @@ export async function PUT(
       title,
       description,
       changedFields,
+
+      // important for viewing complete past notes
+      notesSnapshot: notes,
+      previousNotesSnapshot: existingNotes,
+
       createdAt: now,
     });
 
