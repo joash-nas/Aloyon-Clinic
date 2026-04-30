@@ -8,7 +8,7 @@ import { useAuth } from "@/components/auth/AuthContext";
 
 type Patient = {
   id: string;
-  email: string;
+  email: string | null;
   role: string;
   fullName: string;
   dob: string | null;
@@ -89,6 +89,8 @@ type PatientForm = {
 
 type Tab = "profile" | "notes";
 type NotesView = "current" | "history";
+
+const HISTORY_PAGE_SIZE = 3;
 
 const NOTE_FIELDS: Array<{
   key: keyof DoctorNotes;
@@ -194,6 +196,30 @@ function formatDateTime(date?: string | null) {
   });
 }
 
+function formatSearchDateParts(date?: string | null): string {
+  if (!date) return "";
+
+  const d = new Date(date);
+  if (Number.isNaN(d.getTime())) return "";
+
+  return [
+    d.toISOString(),
+    d.toLocaleDateString("en-PH"),
+    d.toLocaleDateString("en-PH", {
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+    }),
+    d.toLocaleDateString("en-PH", {
+      year: "numeric",
+      month: "long",
+      day: "2-digit",
+    }),
+    d.toLocaleString("en-PH"),
+    formatDateTime(date),
+  ].join(" ");
+}
+
 function getNoteValue(notes: DoctorNotes | null | undefined, key: keyof DoctorNotes) {
   return notes?.[key]?.trim() || "—";
 }
@@ -208,6 +234,33 @@ function getHistorySummary(item: DoctorNoteHistoryItem) {
     item.description ||
     "Doctor note update"
   );
+}
+
+function getHistorySearchText(item: DoctorNoteHistoryItem) {
+  const notes = item.notesSnapshot || {};
+  const previousNotes = item.previousNotesSnapshot || {};
+
+  const currentNoteText = NOTE_FIELDS.map((field) => {
+    return `${field.label} ${notes[field.key] || ""}`;
+  }).join(" ");
+
+  const previousNoteText = NOTE_FIELDS.map((field) => {
+    return `${field.label} ${previousNotes[field.key] || ""}`;
+  }).join(" ");
+
+  return [
+    item.title,
+    item.description,
+    item.doctorName,
+    item.patientName,
+    item.changedFields?.join(" "),
+    getHistorySummary(item),
+    formatSearchDateParts(item.createdAt),
+    currentNoteText,
+    previousNoteText,
+  ]
+    .join(" ")
+    .toLowerCase();
 }
 
 function isEmptyNotes(notes?: DoctorNotes | null) {
@@ -387,6 +440,8 @@ export default function PatientProfilePage() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [notesHistory, setNotesHistory] = useState<DoctorNoteHistoryItem[]>([]);
+  const [historySearch, setHistorySearch] = useState("");
+  const [historyPage, setHistoryPage] = useState(1);
   const [selectedHistory, setSelectedHistory] =
     useState<DoctorNoteHistoryItem | null>(null);
 
@@ -415,15 +470,44 @@ export default function PatientProfilePage() {
       : patient?.sex === "female"
       ? "Female"
       : patient?.sex === "other"
-        ? "Other"
-        : patient?.sex === "prefer_not_to_say"
-          ? "Prefer not to say"
-          : "—";
+      ? "Other"
+      : patient?.sex === "prefer_not_to_say"
+      ? "Prefer not to say"
+      : "—";
 
   const notesDisabled = !isEditingNotes;
   const profileDisabled = !canEditProfile || !isEditingProfile;
 
   const notesEmpty = useMemo(() => isEmptyNotes(notesDraft), [notesDraft]);
+
+  const filteredNotesHistory = useMemo(() => {
+    const needle = historySearch.trim().toLowerCase();
+
+    if (!needle) return notesHistory;
+
+    return notesHistory.filter((item) => getHistorySearchText(item).includes(needle));
+  }, [notesHistory, historySearch]);
+
+  const historyPageCount = Math.max(
+    1,
+    Math.ceil(filteredNotesHistory.length / HISTORY_PAGE_SIZE)
+  );
+
+  const effectiveHistoryPage = Math.min(historyPage, historyPageCount);
+
+  const pagedNotesHistory = useMemo(() => {
+    const start = (effectiveHistoryPage - 1) * HISTORY_PAGE_SIZE;
+    return filteredNotesHistory.slice(start, start + HISTORY_PAGE_SIZE);
+  }, [filteredNotesHistory, effectiveHistoryPage]);
+
+  const historyStart = filteredNotesHistory.length
+    ? (effectiveHistoryPage - 1) * HISTORY_PAGE_SIZE + 1
+    : 0;
+
+  const historyEnd = Math.min(
+    effectiveHistoryPage * HISTORY_PAGE_SIZE,
+    filteredNotesHistory.length
+  );
 
   const textInputCls =
     "mt-1 w-full rounded-2xl border border-neutral-200 px-3 py-2 text-sm outline-none transition " +
@@ -550,6 +634,7 @@ export default function PatientProfilePage() {
   async function loadNotesHistory(allow: boolean) {
     if (!id || !allow) {
       setNotesHistory([]);
+      setHistoryPage(1);
       setHistoryLoading(false);
       return;
     }
@@ -569,9 +654,11 @@ export default function PatientProfilePage() {
       }
 
       setNotesHistory(j.items || []);
+      setHistoryPage(1);
     } catch (e: any) {
       setHistoryError(e.message || "Failed to load note history");
       setNotesHistory([]);
+      setHistoryPage(1);
     } finally {
       setHistoryLoading(false);
     }
@@ -796,6 +883,14 @@ export default function PatientProfilePage() {
     void loadNotesHistory(isDoctor);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, isDoctor]);
+
+  useEffect(() => {
+    setHistoryPage(1);
+  }, [historySearch]);
+
+  useEffect(() => {
+    setHistoryPage((page) => Math.min(Math.max(1, page), historyPageCount));
+  }, [historyPageCount]);
 
   if (loading) {
     return (
@@ -1163,8 +1258,8 @@ export default function PatientProfilePage() {
                         s === "booked"
                           ? "bg-emerald-100 text-emerald-700"
                           : s === "done"
-                            ? "bg-indigo-100 text-indigo-700"
-                            : "bg-rose-100 text-rose-700";
+                          ? "bg-indigo-100 text-indigo-700"
+                          : "bg-rose-100 text-rose-700";
 
                       return (
                         <tr key={a._id} className="border-t border-neutral-100">
@@ -1278,7 +1373,10 @@ export default function PatientProfilePage() {
             </button>
 
             <button
-              onClick={() => setNotesView("history")}
+              onClick={() => {
+                setNotesView("history");
+                setHistoryPage(1);
+              }}
               className={`rounded-full px-4 py-2 text-sm font-medium transition ${
                 notesView === "history"
                   ? "bg-white text-neutral-950 shadow-sm"
@@ -1410,61 +1508,174 @@ export default function PatientProfilePage() {
                   </p>
                 </div>
               ) : (
-                <div className="space-y-3">
-                  {notesHistory.map((item) => (
-                    <div
-                      key={item.id}
-                      className="rounded-3xl border border-neutral-200 bg-white p-4 shadow-sm transition hover:border-lime-300 hover:shadow-md"
-                    >
-                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="font-semibold text-neutral-950">
-                              {formatDateTime(item.createdAt)}
-                            </h3>
-
-                            <span className="rounded-full bg-lime-100 px-2 py-0.5 text-[11px] font-bold text-lime-700">
-                              Saved
-                            </span>
-                          </div>
-
-                          <p className="mt-1 text-sm text-neutral-500">
-                            Saved by {item.doctorName || "Doctor"}
-                          </p>
-
-                          <p className="mt-3 line-clamp-2 text-sm text-neutral-800">
-                            {getHistorySummary(item)}
-                          </p>
-
-                          {item.changedFields?.length > 0 && (
-                            <div className="mt-3 flex flex-wrap gap-1.5">
-                              {item.changedFields.slice(0, 5).map((field) => (
-                                <span
-                                  key={field}
-                                  className="rounded-full bg-neutral-100 px-2 py-1 text-[11px] font-medium text-neutral-600"
-                                >
-                                  {field}
-                                </span>
-                              ))}
-
-                              {item.changedFields.length > 5 && (
-                                <span className="rounded-full bg-neutral-100 px-2 py-1 text-[11px] font-medium text-neutral-600">
-                                  +{item.changedFields.length - 5} more
-                                </span>
-                              )}
-                            </div>
-                          )}
+                <div className="space-y-4">
+                  <div className="rounded-3xl border border-neutral-200 bg-neutral-50 p-4">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                      <div>
+                        <div className="text-sm font-semibold text-neutral-900">
+                          Search note history
                         </div>
+                        <div className="text-xs text-neutral-500">
+                          Search by date, doctor, changed field, or note details.
+                        </div>
+                      </div>
 
-                        <button
-                          onClick={() => setSelectedHistory(item)}
-                          className="shrink-0 rounded-2xl border border-neutral-200 bg-white px-4 py-2 text-sm font-medium hover:bg-neutral-50"
-                        >
-                          View full note
-                        </button>
+                      <div className="flex w-full flex-col gap-2 sm:flex-row lg:max-w-xl">
+                        <input
+                          type="search"
+                          value={historySearch}
+                          onChange={(e) => setHistorySearch(e.target.value)}
+                          placeholder="Search date, doctor, chief complaint, OD, plan..."
+                          className="w-full rounded-2xl border border-neutral-200 bg-white px-4 py-2 text-sm outline-none transition focus:border-lime-400 focus:ring-4 focus:ring-lime-100"
+                        />
+
+                        {historySearch.trim() && (
+                          <button
+                            type="button"
+                            onClick={() => setHistorySearch("")}
+                            className="rounded-2xl border border-neutral-200 bg-white px-4 py-2 text-sm font-medium hover:bg-neutral-50"
+                          >
+                            Clear
+                          </button>
+                        )}
                       </div>
                     </div>
-                  ))}
+                  </div>
+
+                  {filteredNotesHistory.length === 0 ? (
+                    <div className="rounded-3xl border border-amber-200 bg-amber-50 p-6 text-center">
+                      <div className="text-3xl">🔎</div>
+
+                      <h3 className="mt-2 font-semibold text-amber-900">
+                        No matching history found
+                      </h3>
+
+                      <p className="mt-1 text-sm text-amber-800">
+                        Try searching another date, doctor name, or note detail.
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex flex-col gap-2 rounded-3xl border border-neutral-200 bg-neutral-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <div className="text-sm font-semibold text-neutral-900">
+                            Note history
+                          </div>
+
+                          <div className="text-xs text-neutral-500">
+                            Showing {historyStart}–{historyEnd} of{" "}
+                            {filteredNotesHistory.length}{" "}
+                            {historySearch.trim() ? "matching " : ""}
+                            saved note
+                            {filteredNotesHistory.length === 1 ? "" : "s"}
+                            {historySearch.trim()
+                              ? ` (${notesHistory.length} total)`
+                              : ""}
+                          </div>
+                        </div>
+
+                        <div className="text-xs font-medium text-neutral-500">
+                          Page {effectiveHistoryPage} of {historyPageCount}
+                        </div>
+                      </div>
+
+                      <div className="space-y-3">
+                        {pagedNotesHistory.map((item) => (
+                          <div
+                            key={item.id}
+                            className="rounded-3xl border border-neutral-200 bg-white p-4 shadow-sm transition hover:border-lime-300 hover:shadow-md"
+                          >
+                            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                              <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <h3 className="font-semibold text-neutral-950">
+                                    {formatDateTime(item.createdAt)}
+                                  </h3>
+
+                                  <span className="rounded-full bg-lime-100 px-2 py-0.5 text-[11px] font-bold text-lime-700">
+                                    Saved
+                                  </span>
+                                </div>
+
+                                <p className="mt-1 text-sm text-neutral-500">
+                                  Saved by {item.doctorName || "Doctor"}
+                                </p>
+
+                                <p className="mt-3 line-clamp-2 text-sm text-neutral-800">
+                                  {getHistorySummary(item)}
+                                </p>
+
+                                {item.changedFields?.length > 0 && (
+                                  <div className="mt-3 flex flex-wrap gap-1.5">
+                                    {item.changedFields.slice(0, 5).map((field) => (
+                                      <span
+                                        key={field}
+                                        className="rounded-full bg-neutral-100 px-2 py-1 text-[11px] font-medium text-neutral-600"
+                                      >
+                                        {field}
+                                      </span>
+                                    ))}
+
+                                    {item.changedFields.length > 5 && (
+                                      <span className="rounded-full bg-neutral-100 px-2 py-1 text-[11px] font-medium text-neutral-600">
+                                        +{item.changedFields.length - 5} more
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+
+                              <button
+                                onClick={() => setSelectedHistory(item)}
+                                className="shrink-0 rounded-2xl border border-neutral-200 bg-white px-4 py-2 text-sm font-medium hover:bg-neutral-50"
+                              >
+                                View full note
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {filteredNotesHistory.length > HISTORY_PAGE_SIZE && (
+                        <div className="flex flex-col gap-3 rounded-3xl border border-neutral-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="text-sm text-neutral-500">
+                            Showing {historyStart}–{historyEnd} of{" "}
+                            {filteredNotesHistory.length}
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setHistoryPage((p) => Math.max(1, p - 1))
+                              }
+                              disabled={effectiveHistoryPage <= 1}
+                              className="rounded-2xl border border-neutral-200 bg-white px-4 py-2 text-sm font-medium hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              Previous
+                            </button>
+
+                            <div className="rounded-2xl bg-neutral-100 px-4 py-2 text-sm font-medium text-neutral-700">
+                              {effectiveHistoryPage} / {historyPageCount}
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setHistoryPage((p) =>
+                                  Math.min(historyPageCount, p + 1)
+                                )
+                              }
+                              disabled={effectiveHistoryPage >= historyPageCount}
+                              className="rounded-2xl border border-neutral-200 bg-white px-4 py-2 text-sm font-medium hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              Next
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
               )}
             </div>
